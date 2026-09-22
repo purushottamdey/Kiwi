@@ -86,11 +86,13 @@ RUN /Kiwi/manage.py collectstatic --noinput --link
 # CUSTOM RENDER PROXY BYPASS & STABILITY OVERRIDES
 # ====================================================================
 
-# 1. Strip the forced internal Apache server SSL rewrite rules completely
-RUN sed -i '/<VirtualHost \*:8080>/,/<\/VirtualHost>/ { /RewriteRule/d; /RewriteEngine/d; /RewriteCond/d }' /Kiwi/etc/kiwi-httpd.conf || true
-RUN sed -i 's/Redirect permanent \/ https/ # Redirect permanent \/ https/g' /Kiwi/etc/kiwi-httpd.conf || true
+# 1. Force the internal Apache/uWSGI wrapper to completely disable HTTPS enforcement rules
+RUN sed -i 's/RewriteEngine on/RewriteEngine off/g' /Kiwi/etc/kiwi-httpd.conf || true
+RUN sed -i '/<IfModule mod_rewrite.c>/,/<\/IfModule>/d' /Kiwi/etc/kiwi-httpd.conf || true
+RUN sed -i '/RewriteCond/d' /Kiwi/etc/kiwi-httpd.conf || true
+RUN sed -i '/RewriteRule/d' /Kiwi/etc/kiwi-httpd.conf || true
 
-# 2. Inject security whitelists directly inside the active framework settings
+# 2. Inject security whitelists directly inside the core framework configuration
 RUN echo 'SECURE_SSL_REDIRECT = False' >> /Kiwi/tcms/settings/product.py
 RUN echo 'SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")' >> /Kiwi/tcms/settings/product.py
 RUN echo 'CSRF_TRUSTED_ORIGINS = ["https://onrender.com"]' >> /Kiwi/tcms/settings/product.py
