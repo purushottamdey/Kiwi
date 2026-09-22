@@ -80,14 +80,16 @@ RUN sed -i "s/tcms.settings.devel/tcms.settings.product/" /Kiwi/manage.py && \
 # collect static files
 RUN /Kiwi/manage.py collectstatic --noinput --link
 
-RUN sed -i '/<IfModule mod_rewrite.c>/,/<\/IfModule>/d' /Kiwi/etc/kiwi-httpd.conf || true
-RUN sed -i 's/return 301 https:\/\/\$host\$request_uri;//g' /Kiwi/etc/nginx.conf 2>/dev/null || true
 
-# 2. Force Django to trust Render's upstream proxy routing headers and whitelisted domains
-RUN mkdir -p /venv/lib/python3.12/site-packages/tcms_settings_dir/
-RUN echo 'SECURE_SSL_REDIRECT = False' > /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py
-RUN echo 'SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")' >> /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py
-RUN echo 'CSRF_TRUSTED_ORIGINS = ["https://kiwi-j2b3.onrender.com"]' >> /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py
+# 1. Point Nginx directly to the correct Kiwi application proxy configuration instead of the empty default folder
+RUN sed -i 's|/usr/share/nginx/html|/Kiwi|g' /Kiwi/etc/nginx.conf 2>/dev/null || true
+
+# 2. Inject security whitelists directly inside the active Kiwi app workspace settings
+RUN echo 'SECURE_SSL_REDIRECT = False' >> /Kiwi/tcms/settings/product.py
+RUN echo 'SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")' >> /Kiwi/tcms/settings/product.py
+RUN echo 'CSRF_TRUSTED_ORIGINS = ["https://kiwi-j2b3.onrender.com"]' >> /Kiwi/tcms/settings/product.py
+RUN echo 'ALLOWED_HOSTS = ["kiwi-j2b3.onrender.com", "localhost", "127.0.0.1"]' >> /Kiwi/tcms/settings/product.py
+# --------------------------------------------------
 
 
 # from now on execute as non-root
