@@ -58,7 +58,7 @@ ENV LC_ALL=en_US.UTF-8     \
 COPY --from=buildroot /venv/ /venv
 COPY ./manage.py /Kiwi/
 
-# CRITICAL FIX: Copy the built application source code folder into the final container
+# Copy the built application source code folder into the final container
 COPY --from=buildroot /Kiwi/tcms/ /Kiwi/tcms/
 
 # create directories so we can properly set ownership for them
@@ -79,10 +79,11 @@ RUN sed -i "s/tcms.settings.devel/tcms.settings.product/" /Kiwi/manage.py && \
     ln -s /Kiwi/ssl/localhost.crt /etc/pki/tls/certs/localhost.crt && \
     ln -s /Kiwi/ssl/localhost.key /etc/pki/tls/private/localhost.key
 
-# Point Nginx directly to the correct Kiwi application proxy configuration instead of the empty default folder
-RUN sed -i 's|/usr/share/nginx/html|/Kiwi|g' /Kiwi/etc/nginx.conf 2>/dev/null || true
+# Clear the forced Apache VirtualHost redirect loops at the port routing layer
+RUN sed -i 's/RewriteEngine on/RewriteEngine off/g' /Kiwi/etc/kiwi-httpd.conf || true
+RUN sed -i '/RewriteCond %{HTTPS} off/,/RewriteRule/d' /Kiwi/etc/kiwi-httpd.conf || true
 
-# Inject security whitelists directly inside the active Kiwi app workspace settings
+# Inject security whitelists directly inside the active product settings folder
 RUN echo 'SECURE_SSL_REDIRECT = False' >> /Kiwi/tcms/settings/product.py
 RUN echo 'SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")' >> /Kiwi/tcms/settings/product.py
 RUN echo 'CSRF_TRUSTED_ORIGINS = ["https://kiwi-j2b3.onrender.com"]' >> /Kiwi/tcms/settings/product.py
@@ -90,6 +91,27 @@ RUN echo 'ALLOWED_HOSTS = ["kiwi-j2b3.onrender.com", "localhost", "127.0.0.1"]' 
 
 # collect static files
 RUN /Kiwi/manage.py collectstatic --noinput --link
+
+# Declare database arguments needed at build time
+ARG KIWI_DB_ENGINE
+ARG KIWI_DB_HOST
+ARG KIWI_DB_NAME
+ARG KIWI_DB_USER
+ARG KIWI_DB_PASSWORD
+ARG KIWI_DB_PORT
+ARG SECRET_KEY
+
+# Pass arguments to environment variables for the migration run step
+ENV KIWI_DB_ENGINE=$KIWI_DB_ENGINE \
+    KIWI_DB_HOST=$KIWI_DB_HOST \
+    KIWI_DB_NAME=$KIWI_DB_NAME \
+    KIWI_DB_USER=$KIWI_DB_USER \
+    KIWI_DB_PASSWORD=$KIWI_DB_PASSWORD \
+    KIWI_DB_PORT=$KIWI_DB_PORT \
+    SECRET_KEY=$SECRET_KEY
+
+# Run database generation scripts
+RUN /Kiwi/manage.py migrate --noinput && /Kiwi/manage.py initial_setup || true
 
 # from now on execute as non-root
 RUN chown -R 1001 /Kiwi/ /venv/
