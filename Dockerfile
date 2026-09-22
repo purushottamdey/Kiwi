@@ -80,6 +80,11 @@ RUN sed -i "s/tcms.settings.devel/tcms.settings.product/" /Kiwi/manage.py && \
 # collect static files
 RUN /Kiwi/manage.py collectstatic --noinput --link
 
+RUN mkdir -p /venv/lib/python3.12/site-packages/tcms_settings_dir/
+RUN echo 'SECURE_SSL_REDIRECT = False' > /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py
+RUN echo 'SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")' >> /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py
+
+
 # from now on execute as non-root
 RUN chown -R 1001 /Kiwi/ /venv/
 USER 1001
