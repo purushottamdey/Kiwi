@@ -80,15 +80,14 @@ RUN sed -i "s/tcms.settings.devel/tcms.settings.product/" /Kiwi/manage.py && \
 # collect static files
 RUN /Kiwi/manage.py collectstatic --noinput --link
 
-# 1. Strip the hardcoded web server rewrite rules that force SSL inside the container
 RUN sed -i '/<IfModule mod_rewrite.c>/,/<\/IfModule>/d' /Kiwi/etc/kiwi-httpd.conf || true
 RUN sed -i 's/return 301 https:\/\/\$host\$request_uri;//g' /Kiwi/etc/nginx.conf 2>/dev/null || true
 
-# 2. Force Django to trust Render's upstream proxy routing headers
+# 2. Force Django to trust Render's upstream proxy routing headers and whitelisted domains
 RUN mkdir -p /venv/lib/python3.12/site-packages/tcms_settings_dir/
 RUN echo 'SECURE_SSL_REDIRECT = False' > /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py
 RUN echo 'SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")' >> /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py
-# --------------------------------------------------
+RUN echo 'CSRF_TRUSTED_ORIGINS = ["https://kiwi-j2b3.onrender.com"]' >> /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py
 
 
 # from now on execute as non-root
