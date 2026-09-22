@@ -58,6 +58,9 @@ ENV LC_ALL=en_US.UTF-8     \
 COPY --from=buildroot /venv/ /venv
 COPY ./manage.py /Kiwi/
 
+# CRITICAL FIX: Copy the built application source code folder into the final container
+COPY --from=buildroot /Kiwi/tcms/ /Kiwi/tcms/
+
 # create directories so we can properly set ownership for them
 RUN mkdir -p /Kiwi/ssl /Kiwi/static /Kiwi/uploads /Kiwi/etc/cron.jobs
 COPY ./etc/*.conf /Kiwi/etc/
@@ -76,21 +79,17 @@ RUN sed -i "s/tcms.settings.devel/tcms.settings.product/" /Kiwi/manage.py && \
     ln -s /Kiwi/ssl/localhost.crt /etc/pki/tls/certs/localhost.crt && \
     ln -s /Kiwi/ssl/localhost.key /etc/pki/tls/private/localhost.key
 
-
-# collect static files
-RUN /Kiwi/manage.py collectstatic --noinput --link
-
-
-# 1. Point Nginx directly to the correct Kiwi application proxy configuration instead of the empty default folder
+# Point Nginx directly to the correct Kiwi application proxy configuration instead of the empty default folder
 RUN sed -i 's|/usr/share/nginx/html|/Kiwi|g' /Kiwi/etc/nginx.conf 2>/dev/null || true
 
-# 2. Inject security whitelists directly inside the active Kiwi app workspace settings
+# Inject security whitelists directly inside the active Kiwi app workspace settings
 RUN echo 'SECURE_SSL_REDIRECT = False' >> /Kiwi/tcms/settings/product.py
 RUN echo 'SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")' >> /Kiwi/tcms/settings/product.py
 RUN echo 'CSRF_TRUSTED_ORIGINS = ["https://kiwi-j2b3.onrender.com"]' >> /Kiwi/tcms/settings/product.py
 RUN echo 'ALLOWED_HOSTS = ["kiwi-j2b3.onrender.com", "localhost", "127.0.0.1"]' >> /Kiwi/tcms/settings/product.py
-# --------------------------------------------------
 
+# collect static files
+RUN /Kiwi/manage.py collectstatic --noinput --link
 
 # from now on execute as non-root
 RUN chown -R 1001 /Kiwi/ /venv/
