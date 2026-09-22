@@ -95,8 +95,8 @@ RUN sed -i '/RewriteRule/d' /Kiwi/etc/kiwi-httpd.conf || true
 # 2. Inject security whitelists directly inside the core framework configuration
 RUN echo 'SECURE_SSL_REDIRECT = False' >> /Kiwi/tcms/settings/product.py
 RUN echo 'SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")' >> /Kiwi/tcms/settings/product.py
-RUN echo 'CSRF_TRUSTED_ORIGINS = ["https://onrender.com"]' >> /Kiwi/tcms/settings/product.py
-RUN echo 'ALLOWED_HOSTS = ["://onrender.com", "localhost", "127.0.0.1"]' >> /Kiwi/tcms/settings/product.py
+RUN echo 'CSRF_TRUSTED_ORIGINS = ["https://kiwi-j2b3.onrender.com"]' >> /Kiwi/tcms/settings/product.py
+RUN echo 'ALLOWED_HOSTS = ["kiwi-j2b3.onrender.com", "localhost", "127.0.0.1"]' >> /Kiwi/tcms/settings/product.py
 
 # Declare database arguments needed if re-verifying connections at build time
 ARG KIWI_DB_ENGINE
