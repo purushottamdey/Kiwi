@@ -43,7 +43,8 @@ COPY --from=buildroot /Kiwi/dist/ /
 
 FROM runtime-base AS kiwitcms
 
-HEALTHCHECK CMD curl --fail -k -H "Referer: healthcheck" https://127.0.0
+# FIX 1: Correct health check destination pattern targeting the standard local proxy endpoint
+HEALTHCHECK CMD curl --fail http://127.0.0
 
 EXPOSE 8080
 EXPOSE 8443
@@ -82,41 +83,15 @@ RUN sed -i "s/tcms.settings.devel/tcms.settings.product/" /Kiwi/manage.py && \
 # collect static files
 RUN /Kiwi/manage.py collectstatic --noinput --link
 
-# ====================================================================
-# CUSTOM RENDER PROXY BYPASS & STABILITY OVERRIDES
-# ====================================================================
+# FIX 2 & 3: Inject setting flags to the official path using global wildcards
+RUN mkdir -p /venv/lib/python3.12/site-packages/tcms_settings_dir/ && \
+    echo 'SECURE_SSL_REDIRECT = False' > /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py && \
+    echo 'SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")' >> /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py && \
+    echo 'CSRF_TRUSTED_ORIGINS = ["https://*.onrender.com", "http://localhost", "http://127.0.0.1"]' >> /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py && \
+    echo 'ALLOWED_HOSTS = ["*"]' >> /venv/lib/python3.12/site-packages/tcms_settings_dir/custom_settings.py
 
-# 1. Force the internal Apache/uWSGI wrapper to completely disable HTTPS enforcement rules
+# FIX 4: Correct local server config update targets inside the active workspace environment
 RUN sed -i 's/RewriteEngine on/RewriteEngine off/g' /Kiwi/etc/kiwi-httpd.conf || true
-RUN sed -i '/<IfModule mod_rewrite.c>/,/<\/IfModule>/d' /Kiwi/etc/kiwi-httpd.conf || true
-RUN sed -i '/RewriteCond/d' /Kiwi/etc/kiwi-httpd.conf || true
-RUN sed -i '/RewriteRule/d' /Kiwi/etc/kiwi-httpd.conf || true
-
-# 2. Inject security whitelists directly inside the core framework configuration
-RUN echo 'SECURE_SSL_REDIRECT = False' >> /Kiwi/tcms/settings/product.py
-RUN echo 'SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")' >> /Kiwi/tcms/settings/product.py
-RUN echo 'CSRF_TRUSTED_ORIGINS = ["https://kiwi-j2b3.onrender.com"]' >> /Kiwi/tcms/settings/product.py
-RUN echo 'ALLOWED_HOSTS = ["kiwi-j2b3.onrender.com", "localhost", "127.0.0.1"]' >> /Kiwi/tcms/settings/product.py
-
-# Declare database arguments needed if re-verifying connections at build time
-ARG KIWI_DB_ENGINE
-ARG KIWI_DB_HOST
-ARG KIWI_DB_NAME
-ARG KIWI_DB_USER
-ARG KIWI_DB_PASSWORD
-ARG KIWI_DB_PORT
-ARG SECRET_KEY
-
-# Pass arguments to internal environment variables
-ENV KIWI_DB_ENGINE=$KIWI_DB_ENGINE \
-    KIWI_DB_HOST=$KIWI_DB_HOST \
-    KIWI_DB_NAME=$KIWI_DB_NAME \
-    KIWI_DB_USER=$KIWI_DB_USER \
-    KIWI_DB_PASSWORD=$KIWI_DB_PASSWORD \
-    KIWI_DB_PORT=$KIWI_DB_PORT \
-    SECRET_KEY=$SECRET_KEY
-
-# ====================================================================
 
 # from now on execute as non-root
 RUN chown -R 1001 /Kiwi/ /venv/
